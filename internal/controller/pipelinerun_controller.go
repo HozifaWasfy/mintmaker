@@ -271,7 +271,7 @@ func (r *PipelineRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if err := yaml.Unmarshal([]byte(cm.Data["pipelinerunConfigs"]), r.Config); err != nil {
-		r.Config.MaxSimultaneousPipelineRuns = 40 // TODO: extended with default values in the future
+		r.Config.MaxSimultaneousPipelineRuns = 40 // TODO: extend with default values from a file in the future
 		return err
 	}
 
