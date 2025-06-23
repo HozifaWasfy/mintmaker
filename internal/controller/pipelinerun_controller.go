@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/yaml"
 
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 
@@ -39,11 +40,16 @@ import (
 )
 
 var (
-	MaxSimultaneousPipelineRuns      = 40
 	MintMakerGitPlatformLabel        = "mintmaker.appstudio.redhat.com/git-platform"
 	MintMakerComponentNameLabel      = "mintmaker.appstudio.redhat.com/component"
 	MintMakerComponentNamespaceLabel = "mintmaker.appstudio.redhat.com/namespace"
 )
+
+// configuration schema for pipelinerun controller
+type PipelineRunControllerConfig struct {
+	//TODO: extendable with more values in the future
+	MaxSimultaneousPipelineRuns int `yaml:"maxSimultaneousPipelineRuns"`
+}
 
 // Collect pipelineruns with state 'running' or 'started'
 func countRunningPipelineRuns(existingPipelineRuns tektonv1.PipelineRunList) (int, error) {
@@ -65,6 +71,7 @@ func countRunningPipelineRuns(existingPipelineRuns tektonv1.PipelineRunList) (in
 type PipelineRunReconciler struct {
 	Client client.Client
 	Scheme *runtime.Scheme
+	Config *PipelineRunControllerConfig
 }
 
 func (r *PipelineRunReconciler) listExistingPipelineRuns(ctx context.Context, req ctrl.Request) (tektonv1.PipelineRunList, error) {
@@ -230,7 +237,7 @@ func (r *PipelineRunReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	githubPipelineRuns := filterPipelineRunListWithLabel(existingPipelineRuns, "github")
 
 	// Launch up to N pipelineruns, 'github' ones first
-	numToLaunch := MaxSimultaneousPipelineRuns - numRunning
+	numToLaunch := r.Config.MaxSimultaneousPipelineRuns - numRunning
 	err = r.launchUpToNPipelineRuns(numToLaunch, githubPipelineRuns, ctx)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -241,7 +248,7 @@ func (r *PipelineRunReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "Unable to count running pipelineruns")
 		return ctrl.Result{}, err
 	}
-	numToLaunch = MaxSimultaneousPipelineRuns - numRunning
+	numToLaunch = r.Config.MaxSimultaneousPipelineRuns - numRunning
 	err = r.launchUpToNPipelineRuns(numToLaunch, existingPipelineRuns, ctx)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -252,6 +259,22 @@ func (r *PipelineRunReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PipelineRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	uncachedClient, _ := client.New(mgr.GetConfig(), client.Options{})
+	cm := &corev1.ConfigMap{}
+	cmName := types.NamespacedName{
+		Namespace: MintMakerNamespaceName,
+		Name:      "mintmaker-controller-configmap",
+	}
+
+	if err := uncachedClient.Get(context.TODO(), cmName, cm); err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal([]byte(cm.Data["pipelinerunConfigs"]), r.Config); err != nil {
+		r.Config.MaxSimultaneousPipelineRuns = 40 // TODO: extended with default values in the future
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&tektonv1.PipelineRun{}).
 		WithEventFilter(predicate.Funcs{
