@@ -16,45 +16,34 @@ package controller
 
 import (
 	"context"
-	"os"
+	"strconv"
 
 	appstudiov1alpha1 "github.com/konflux-ci/application-api/api/v1alpha1"
 	mmv1alpha1 "github.com/konflux-ci/mintmaker/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
-// Load configuration from yaml file
-func loadControllerConfigFile(configFileDir string, controllerType string, apiClient client.Client) (map[string]interface{}, error) {
-	fileContent, err := os.ReadFile(configFileDir)
+func str2int(s string) (int, error) {
+	i, err := strconv.Atoi(s)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
-	var config = make(map[string]interface{})
-	if err := yaml.Unmarshal(fileContent, &config); err != nil {
-		return nil, err
-	}
-
-	return config, nil
+	return i, nil
 }
 
 // Load configurations from cnfigMap
-func loadControllerConfig(cmName string, namespace string, controllerType string, apiClient client.Client) (map[string]interface{}, error) {
-	var config = make(map[string]interface{}) //will add coonfig schema once I know what values should be added.
+func loadControllerConfig(apiClient client.Client) (map[string]string, error) {
 	var cm corev1.ConfigMap
 	if err := apiClient.Get(context.TODO(), types.NamespacedName{
-		Namespace: namespace,
-		Name:      cmName,
+		Namespace: "mintmaker",
+		Name:      "mintmaker-controller-configmap",
 	}, &cm); err != nil {
-		return loadControllerConfigFile("../../config/controller/config.yaml", controllerType, apiClient)
+		return nil, err
 	}
 
-	if err := yaml.Unmarshal([]byte(cm.Data[controllerType]), config); err != nil {
-		return loadControllerConfigFile("../../config/controller/config.yaml", controllerType, apiClient)
-	}
-	return config, nil
+	return cm.Data, nil
 }
 
 // Get only components that match a given namespace/application/componentname

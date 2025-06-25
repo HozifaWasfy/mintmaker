@@ -48,6 +48,7 @@ import (
 type DependencyUpdateCheckReconciler struct {
 	Client client.Client
 	Scheme *runtime.Scheme
+	Config map[string]string
 }
 
 func NewDependencyUpdateCheckReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder) *DependencyUpdateCheckReconciler {
@@ -494,6 +495,12 @@ func (r *DependencyUpdateCheckReconciler) Reconcile(ctx context.Context, req ctr
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *DependencyUpdateCheckReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	uncachedClient, _ := client.New(mgr.GetConfig(), client.Options{})
+	config, err := loadControllerConfig(uncachedClient)
+	if err != nil {
+		return err
+	}
+	r.Config = config
 	// we are monitoring the creation of DependencyUpdateCheck
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mmv1alpha1.DependencyUpdateCheck{}).
