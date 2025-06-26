@@ -16,35 +16,11 @@ package controller
 
 import (
 	"context"
-	"strconv"
 
 	appstudiov1alpha1 "github.com/konflux-ci/application-api/api/v1alpha1"
 	mmv1alpha1 "github.com/konflux-ci/mintmaker/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func str2int(s string) (int, error) {
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		return -1, err
-	}
-	return i, nil
-}
-
-// Load configurations from cnfigMap
-func loadControllerConfig(apiClient client.Client) (map[string]string, error) {
-	var cm corev1.ConfigMap
-	if err := apiClient.Get(context.TODO(), types.NamespacedName{
-		Namespace: "mintmaker",
-		Name:      "mintmaker-controller-configmap",
-	}, &cm); err != nil {
-		return nil, err
-	}
-
-	return cm.Data, nil
-}
 
 // Get only components that match a given namespace/application/componentname
 func getFilteredComponents(namespaces []mmv1alpha1.NamespaceSpec, apiClient client.Client, ctx context.Context) ([]appstudiov1alpha1.Component, error) {
